@@ -1,0 +1,9 @@
+# Ignored files and documents
+__pycache__
+venv
+ngrok
+test.py
+
+# Ignored VSCode dirs
+.vs
+.vscode
