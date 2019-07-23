@@ -78,4 +78,4 @@ def handle_bad_request(e):
 
 if __name__ == "__main__":
     # host="0.0.0.0", port=5000, debug=True
-    app.run()
+    app.run(debug=True)
