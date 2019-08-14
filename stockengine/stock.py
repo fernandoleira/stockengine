@@ -1,7 +1,14 @@
 import requests
-from lxml import html
+import selectolax.parser as sp
 
 ALPHA_API_KEY = "76B2BGRH6OJS3Z0I"
+NAME_FILTER = {
+    ord(" "): "_",
+    ord("."): "",
+    ord("("): "",
+    ord(")"): "",
+    ord("'"): "",
+}
 
 class Stock:
     def __init__(self, symbol):
@@ -9,29 +16,38 @@ class Stock:
 
     def profile(self):
         prof = dict()
-        url = "https://money.cnn.com/quote/quote.html?symb={}".format(self.symbol.upper())
+        url = "https://finance.yahoo.com/quote/{}".format(self.symbol.upper())
         req = requests.get(url)
-        res = html.fromstring(req.content)
+        res = req.content
 
         if req.status_code != 200:
             return {'error': 'Not Founded'}
 
         # Check if company exists
-        if res.xpath("//h1//text()")[0] == "Symbol not found":
-            return {"error": "stock not founded"}
+        exists_check = sp.HTMLParser(res).css("section span")
+        if len(exists_check) >= 2 and exists_check[1].text() == "All (0)":
+            return {'error': 'Not Founded'}
 
-        # Find company information
-        prof["Symbol"] = self.symbol
-        prof["Company Name"] = res.xpath('//h1[@class="wsod_fLeft"]//text()')[0][0:-1]
-        prof["Price ($)"] = res.xpath('//td[@class="wsod_last"]//text()')[0]
-        prof["Change ($)"] = res.xpath('//td[@class="wsod_change"]//text()')[1]
-        prof["Change (%)"] = res.xpath('//td[@class="wsod_change"]//text()')[3][0:-1]
-        prof["YTD"] = res.xpath('//td[@class="wsod_ytd"]//text()')[0][0:-1]
+        # Extract h1 elements
+        h1_raw = sp.HTMLParser(res).css("h1")
+        company_title = h1_raw[0].text()
+        prof["symbol"] = self.symbol
+        prof["company_title"] = company_title[company_title.find('-')+2:]
 
-        raw_key = res.xpath('//div[@class="clearfix wsod_DataColumnLeft"]//text()')[1:]
-        for i in range(0, len(raw_key), 2):
-            prof[raw_key[i]] = raw_key[i+1]
-            if raw_key[i] == 'Market cap':
+        # Extract span elements
+        span_raw = sp.HTMLParser(res).css("span")[13:]
+        
+        prof["exchange"] = span_raw[0].text()[0:span_raw[0].text().find('-')-1]
+        prof["price"] = span_raw[1].text()
+        prof["change_amount"] = span_raw[2].text()[0:span_raw[2].text().find(" ")]
+        prof["change_percentage"] = span_raw[2].text()[span_raw[2].text().find("(")+1:span_raw[2].text().find("%")]
+        
+        for node in range(0, len(span_raw)):
+            if span_raw[node].text() == "Previous Close":
+                for ind in range(node, node + 22, 2):
+                    key = span_raw[ind].text().lower().translate(NAME_FILTER)
+                    val = span_raw[ind+1].text()
+                    prof[key] = val
                 break
 
         return prof
